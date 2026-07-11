@@ -199,8 +199,10 @@ Route commands are executed through system `route`, so updates can require helpe
 To keep Ozon routes fresh on macOS, install the LaunchDaemon helper once:
 
 ```bash
-sudo bash scripts/install-egress-routes-launchdaemon.sh
+sudo bash scripts/install-ozon-direct-bypass.sh
 ```
+
+The Ozon installer writes/updates the `ozon-direct` rule in `egress-routes.json`, installs the periodic LaunchDaemon, and prints the current route-gate status.
 
 It runs at boot and then periodically. Remove it with:
 

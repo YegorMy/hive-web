@@ -198,8 +198,10 @@ hive-web-egress-routes ensure --force --url https://www.ozon.ru
 Чтобы маршруты Ozon обновлялись на macOS постоянно, один раз установите LaunchDaemon helper:
 
 ```bash
-sudo bash scripts/install-egress-routes-launchdaemon.sh
+sudo bash scripts/install-ozon-direct-bypass.sh
 ```
+
+Ozon installer записывает/обновляет правило `ozon-direct` в `egress-routes.json`, устанавливает периодический LaunchDaemon и выводит текущий статус route gate.
 
 Он запускается при старте системы и затем периодически. Удаление:
 
