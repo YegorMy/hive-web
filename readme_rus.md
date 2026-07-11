@@ -13,6 +13,20 @@ action-web   живые Playwright-сессии с компактными сни
 
 Обычное исследование идёт через static-web. Если сайт требует браузер, форму или навигацию, используется action-web. Оба режима возвращают короткие структурированные ответы, а крупные данные кладут в локальные артефакты.
 
+## Имена
+
+Проект называется **Hive Web**. Репозиторий на GitHub называется `hive-web`.
+
+Python-пакет и исполняемая команда называются `hive-web-runtime`, потому что это локальный runtime/MCP-сервер. В MCP-клиентах сервер обычно регистрируется как `hive_web`.
+
+```text
+GitHub repository   hive-web
+Python package      hive-web-runtime
+CLI command         hive-web-runtime
+MCP server name     hive_web
+Python module       hive_web_runtime
+```
+
 ## Инструменты
 
 Static tools:
@@ -54,9 +68,27 @@ HIVE_WEB_ARTIFACT_DIR=~/.cache/hive-web-runtime/artifacts
 ```bash
 git clone https://github.com/YegorMy/hive-web.git
 cd hive-web
-uv sync
 uv run playwright install chromium
+bash scripts/install-hermes-mcp.sh
 ```
+
+Скрипт установки запускает `uv sync`, прописывает `hive_web` в `~/.hermes/config.yaml` и проверяет MCP-подключение. Шаг с Playwright нужен для браузерных инструментов `action_web_*`; для `static_web_*` достаточно SearXNG и Firecrawl.
+
+После изменения MCP-конфига перезагрузите MCP в клиенте или начните новую сессию.
+
+```text
+/reload-mcp
+```
+
+Ручной запуск сервера, обычно только для отладки:
+
+```bash
+uv run hive-web-runtime
+```
+
+Сервер работает по MCP stdio и ждёт подключения клиента.
+
+## Проверки для разработки
 
 Запуск unit-тестов:
 
@@ -70,17 +102,9 @@ Live smoke test через MCP. Для него Firecrawl должен быть 
 uv run python scripts/test-mcp-client.py
 ```
 
-Ручной запуск MCP-сервера:
-
-```bash
-uv run hive-web-runtime
-```
-
-Сервер работает по MCP stdio и ждёт подключения клиента.
-
 ## Подключение к Hermes
 
-Скрипт прописывает `hive_web` в `~/.hermes/config.yaml` и сразу проверяет подключение:
+Если вы не запускали installer выше, выполните его из клонированного репозитория:
 
 ```bash
 bash scripts/install-hermes-mcp.sh

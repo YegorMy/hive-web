@@ -13,6 +13,20 @@ action-web   live Playwright sessions with compact snapshots and safe actions
 
 Static tools handle normal research. Action tools are for sites that need a browser, forms, or navigation. Both return compact, structured data and store larger payloads as local artifacts.
 
+## Naming
+
+The project is called **Hive Web**. The GitHub repository is `hive-web`.
+
+The Python package and executable are named `hive-web-runtime` because they run the local MCP server. MCP clients usually register that server as `hive_web`.
+
+```text
+GitHub repository   hive-web
+Python package      hive-web-runtime
+CLI command         hive-web-runtime
+MCP server name     hive_web
+Python module       hive_web_runtime
+```
+
 ## Tools
 
 Static tools:
@@ -54,9 +68,27 @@ If you already run SearXNG and Firecrawl somewhere else, set those environment v
 ```bash
 git clone https://github.com/YegorMy/hive-web.git
 cd hive-web
-uv sync
 uv run playwright install chromium
+bash scripts/install-hermes-mcp.sh
 ```
+
+The installer runs `uv sync`, writes a `hive_web` entry into `~/.hermes/config.yaml`, and tests the MCP connection. The Playwright install step is needed for `action_web_*` browser tools; `static_web_*` tools only need SearXNG and Firecrawl.
+
+After changing MCP config, reload MCP in your client or start a new session.
+
+```text
+/reload-mcp
+```
+
+Manual server start, mostly useful for debugging:
+
+```bash
+uv run hive-web-runtime
+```
+
+The server speaks MCP over stdio, so it waits for an MCP client.
+
+## Development checks
 
 Run the unit tests:
 
@@ -70,17 +102,9 @@ Run a live MCP smoke test. This requires Firecrawl to be reachable at `FIRECRAWL
 uv run python scripts/test-mcp-client.py
 ```
 
-Start the MCP server manually:
-
-```bash
-uv run hive-web-runtime
-```
-
-The server speaks MCP over stdio, so it waits for an MCP client.
-
 ## Hermes setup
 
-The installer writes a `hive_web` entry into `~/.hermes/config.yaml` and tests the connection:
+If you skipped the install script above, run it from the cloned repository:
 
 ```bash
 bash scripts/install-hermes-mcp.sh
