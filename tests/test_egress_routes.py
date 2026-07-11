@@ -88,6 +88,36 @@ def test_permission_failure_returns_warning_without_strict_failure(tmp_path):
     assert "ROUTE_APPLY_FAILED" in codes
 
 
+def test_manager_adds_host_route_before_changing_existing_route(tmp_path):
+    config = RuntimeConfig(egress_routes_config_path=tmp_path / "egress-routes.json", egress_routes_state_path=tmp_path / "egress-routes-state.json")
+    manager = EgressRouteManager(config)
+    route_writes: list[list[str]] = []
+
+    def fake_run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+        if cmd == ["route", "-n", "get", "default"]:
+            return subprocess.CompletedProcess(cmd, 0, stdout="gateway: 10.1.1.1\ninterface: en0\n")
+        if cmd[:3] == ["route", "-n", "get"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout="route to: 6.6.6.6\ndestination: 128.0.0.0\n       mask: 128.0.0.0\n  interface: utun4\n",
+            )
+        route_writes.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="")
+
+    manager._is_supported_platform = lambda: True
+    manager._run_route = fake_run
+    manager._get_default_route = lambda: {"gateway": "10.1.1.1", "interface": "en0"}
+    manager._resolve_host = lambda host: {"ozon.ru": ["6.6.6.6"], "www.ozon.ru": ["7.7.7.7"]}[host]
+
+    result = manager.ensure_for_host("ozon.ru", force=True)
+
+    assert route_writes[0][:4] == ["route", "-n", "add", "-host"]
+    assert not any(cmd[:4] == ["route", "-n", "change", "-host"] for cmd in route_writes)
+    actions = {route_result["action"] for rule in result["rules"] for route_result in rule["route_results"]}
+    assert actions == {"add"}
+
+
 def test_strict_failure_raises_error(tmp_path):
     strict_config = dict(DEFAULT_EGRESS_ROUTES)
     strict_config["rules"] = [dict(rule, strict=True) for rule in strict_config["rules"]]

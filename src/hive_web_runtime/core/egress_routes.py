@@ -203,7 +203,8 @@ class EgressRouteManager:
             }
             return {"ip": ip, "status": "warn", "action": "skipped", "warning": warning}
 
-        if current and self._is_desired_route(current, desired_gateway, desired_interface):
+        current_is_host_route = self._is_host_route(current, ip) if current else False
+        if current and current_is_host_route and self._is_desired_route(current, desired_gateway, desired_interface):
             return {
                 "ip": ip,
                 "status": "ok",
@@ -212,15 +213,14 @@ class EgressRouteManager:
                 "interface": desired_interface,
             }
 
-        warning_error: str | None = None
-        action = "change"
-        result = self._run_route(["route", "-n", "change", "-host", ip, desired_gateway])
-        if result.returncode != 0:
-            warning_error = (result.stderr or result.stdout or "").strip()
-            action = "add"
-            result = self._run_route(["route", "-n", "add", "-host", ip, desired_gateway])
-            if result.returncode != 0 and not warning_error:
-                warning_error = (result.stderr or result.stdout or "").strip()
+        action = "add"
+        result = self._run_route(["route", "-n", "add", "-host", ip, desired_gateway])
+        warning_error = (result.stderr or result.stdout or "").strip() if result.returncode != 0 else None
+        if result.returncode != 0 and current_is_host_route:
+            action = "change"
+            result = self._run_route(["route", "-n", "change", "-host", ip, desired_gateway])
+            if result.returncode != 0:
+                warning_error = (result.stderr or result.stdout or warning_error or "").strip()
 
         if result.returncode != 0:
             warning = {
@@ -261,14 +261,31 @@ class EgressRouteManager:
         return True
 
     @staticmethod
+    def _is_host_route(current: dict[str, str] | None, ip: str) -> bool:
+        if not current:
+            return False
+        if current.get("destination") == ip:
+            return True
+        return "HOST" in current.get("flags", "")
+
+    @staticmethod
     def _parse_route_output(output: str) -> dict[str, str]:
         route: dict[str, str] = {}
+        match_destination = re.search(r"^\s*destination:\s*(\S+)", output, re.M)
         match_gateway = re.search(r"^\s*gateway:\s*(\S+)", output, re.M)
         match_interface = re.search(r"^\s*interface:\s*(\S+)", output, re.M)
+        match_mask = re.search(r"^\s*mask:\s*(\S+)", output, re.M)
+        match_flags = re.search(r"^\s*flags:\s*<([^>]+)>", output, re.M)
+        if match_destination:
+            route["destination"] = match_destination.group(1)
         if match_gateway:
             route["gateway"] = match_gateway.group(1)
         if match_interface:
             route["interface"] = match_interface.group(1)
+        if match_mask:
+            route["mask"] = match_mask.group(1)
+        if match_flags:
+            route["flags"] = match_flags.group(1)
         return route
 
     def _get_default_route(self) -> dict[str, str]:

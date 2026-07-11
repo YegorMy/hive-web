@@ -8,7 +8,7 @@ TARGET_HOME="${TARGET_HOME:-$(dscl . -read "/Users/${TARGET_USER}" NFSHomeDirect
 CONFIG_PATH="${CONFIG_PATH:-${TARGET_HOME}/.config/hive-web-runtime/egress-routes.json}"
 STATE_PATH="${STATE_PATH:-${TARGET_HOME}/.cache/hive-web-runtime/egress-routes-state.json}"
 TARGET_URL="${TARGET_URL:-https://www.ozon.ru}"
-INTERVAL_SECONDS="${INTERVAL_SECONDS:-1800}"
+INTERVAL_SECONDS="${INTERVAL_SECONDS:-300}"
 LABEL="${LABEL:-com.hive-web-runtime.egress-routes.ozon}"
 
 if [[ -z "$UV_BIN" ]]; then
@@ -99,4 +99,14 @@ bash "$PROJECT_DIR/scripts/install-egress-routes-launchdaemon.sh"
 "$UV_BIN" run --project "$PROJECT_DIR" hive-web-egress-routes \
   --config "$CONFIG_PATH" \
   --state "$STATE_PATH" \
-  status
+  ensure --force --url "$TARGET_URL"
+
+cat <<'MSG'
+
+Verify Ozon host routes after install or VPN reconnect:
+  route -n get 185.73.193.68
+  route -n get 185.73.194.82
+
+Expected: Ozon routes use your normal network interface/gateway, not utun*.
+Claude/Anthropic/OpenAI routes should still use the VPN route when your VPN is connected.
+MSG

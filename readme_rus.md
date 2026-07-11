@@ -225,12 +225,29 @@ hive-web-egress-routes ensure --force --url https://www.ozon.ru
 sudo bash scripts/install-ozon-direct-bypass.sh
 ```
 
-Ozon installer записывает/обновляет правило `ozon-direct` в `egress-routes.json`, устанавливает периодический LaunchDaemon и выводит текущий статус route gate.
+Установщик Ozon записывает/обновляет правило `ozon-direct` в `egress-routes.json`, устанавливает периодический LaunchDaemon и сразу выполняет privileged route refresh. По умолчанию helper обновляет маршруты каждые 5 минут.
 
-Он запускается при старте системы и затем периодически. Удаление:
+Безопасное состояние:
+
+```text
+Anthropic / OpenAI / Claude Code -> VPN route вроде utun*
+Ozon host IPs                   -> обычный локальный интерфейс/gateway вроде en0
+```
+
+Проверяйте после установки или после переподключения VPN:
 
 ```bash
-sudo bash scripts/uninstall-egress-routes-launchdaemon.sh
+route -n get 185.73.193.68
+route -n get 185.73.194.82
+```
+
+Если Ozon routes снова показывают `utun*`, перезапустите installer или дождитесь refresh от LaunchDaemon. На некоторых VPN переподключение может заменить host routes.
+Если вы запускали старую версию Ozon helper и API-трафик пошёл напрямую вместо VPN, один раз переподключите VPN, чтобы восстановить broad split routes, затем запустите этот исправленный installer.
+
+Удаление Ozon helper:
+
+```bash
+sudo LABEL=com.hive-web-runtime.egress-routes.ozon bash scripts/uninstall-egress-routes-launchdaemon.sh
 ```
 
 Это только обновляет локальные маршруты для настроенных доменов. Механизм не обходит CAPTCHA, не логинится, не добавляет товары в корзину и не автоматизирует checkout.
