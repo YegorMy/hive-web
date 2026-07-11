@@ -9,6 +9,7 @@ from hive_web_runtime.action_web.snapshots import SNAPSHOT_JS, condense_snapshot
 from hive_web_runtime.core.artifacts import ArtifactStore, new_artifact_id
 from hive_web_runtime.core.config import RuntimeConfig
 from hive_web_runtime.static_web.client import StaticWebClient
+from hive_web_runtime.core.egress_routes import EgressRouteManager
 
 SENSITIVE_RE = re.compile(r"(pay|payment|purchase|buy now|book now|confirm booking|оплат|купить|забронировать|подтвердить|2fa|password|парол|captcha)", re.I)
 
@@ -27,9 +28,10 @@ class BrowserSession:
 class ActionWebRuntime:
     """Stateful Playwright layer. It depends on static-web for search/query navigation."""
 
-    def __init__(self, config: RuntimeConfig | None = None, static_web: StaticWebClient | None = None):
+    def __init__(self, config: RuntimeConfig | None = None, static_web: StaticWebClient | None = None, egress_routes: EgressRouteManager | None = None):
         self.config = config or RuntimeConfig()
         self.static_web = static_web or StaticWebClient(self.config)
+        self.egress_routes = egress_routes or EgressRouteManager(self.config)
         self.artifacts = ArtifactStore(self.config.artifact_dir)
         self._playwright = None
         self._sessions: dict[str, BrowserSession] = {}
@@ -65,8 +67,17 @@ class ActionWebRuntime:
             target_url = result.results[0].url
         if not target_url:
             raise ValueError("Either url or search_query is required")
+
+        egress_status = self.egress_routes.ensure_for_url(target_url)
         response = await session.page.goto(target_url, wait_until=wait_until)
-        return {"session_id": session_id, "url": session.page.url, "status": getattr(response, "status", None)}
+        result = {
+            "session_id": session_id,
+            "url": session.page.url,
+            "status": getattr(response, "status", None),
+        }
+        if egress_status.get("matched"):
+            result["egress_route"] = egress_status
+        return result
 
     async def snapshot(self, session_id: str, max_tokens: int | None = None) -> BrowserSnapshot:
         max_tokens = max_tokens or self.config.default_max_tokens
