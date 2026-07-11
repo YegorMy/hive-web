@@ -5,7 +5,6 @@ from typing import Any
 
 from hive_web_runtime.core.artifacts import ArtifactStore, new_artifact_id
 from hive_web_runtime.core.config import RuntimeConfig
-from hive_web_runtime.core.egress_routes import EgressRouteManager
 from hive_web_runtime.core.tokens import count_tokens, trim_to_token_budget
 from hive_web_runtime.static_web.models import ExtractResponse, SearchResponse, SearchResult
 from hive_web_runtime.static_web.transport import StaticWebTransport
@@ -14,10 +13,9 @@ from hive_web_runtime.static_web.transport import StaticWebTransport
 class StaticWebClient:
     """Cheap stateless web access through SearXNG + Firecrawl."""
 
-    def __init__(self, config: RuntimeConfig | None = None, transport: Any | None = None, egress_routes: EgressRouteManager | None = None):
+    def __init__(self, config: RuntimeConfig | None = None, transport: Any | None = None):
         self.config = config or RuntimeConfig()
-        self.egress_routes = egress_routes or EgressRouteManager(self.config)
-        self.transport = transport or StaticWebTransport(self.config.searxng_url, self.config.firecrawl_url, egress_routes=self.egress_routes)
+        self.transport = transport or StaticWebTransport(self.config.searxng_url, self.config.firecrawl_url)
         self.artifacts = ArtifactStore(self.config.artifact_dir)
 
     async def search(self, query: str, limit: int = 5, max_tokens: int | None = None) -> SearchResponse:

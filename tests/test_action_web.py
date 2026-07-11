@@ -43,26 +43,9 @@ class _FakePage:
         return _FakeResponse()
 
 
-class _StubRouteManager:
-    def __init__(self):
-        self.calls = []
-
-    def ensure_for_url(self, url: str, force: bool = False):
-        self.calls.append((url, force))
-        return {"matched": True, "host": "ozon.ru", "rules": []}
-
-
 @pytest.mark.asyncio
-async def test_navigate_runs_egress_route_gate_before_goto(tmp_path):
-    route_manager = _StubRouteManager()
-    runtime = ActionWebRuntime(
-        config=RuntimeConfig(
-            artifact_dir=tmp_path / "artifacts",
-            egress_routes_config_path=tmp_path / "egress-routes.json",
-            egress_routes_state_path=tmp_path / "egress-routes-state.json",
-        ),
-        egress_routes=route_manager,
-    )
+async def test_navigate_goes_to_target_url(tmp_path):
+    runtime = ActionWebRuntime(config=RuntimeConfig(artifact_dir=tmp_path / "artifacts"))
     fake_page = _FakePage()
     runtime._sessions["s1"] = BrowserSession(
         session_id="s1",
@@ -72,8 +55,8 @@ async def test_navigate_runs_egress_route_gate_before_goto(tmp_path):
         headless=True,
     )
 
-    result = await runtime.navigate("s1", url="https://www.ozon.ru/category")
+    result = await runtime.navigate("s1", url="https://example.com/category")
 
-    assert route_manager.calls == [("https://www.ozon.ru/category", False)]
-    assert fake_page.url == "https://www.ozon.ru/category"
-    assert result["egress_route"]["matched"] is True
+    assert fake_page.calls == [("https://example.com/category", "domcontentloaded")]
+    assert fake_page.url == "https://example.com/category"
+    assert result == {"session_id": "s1", "url": "https://example.com/category", "status": 200}

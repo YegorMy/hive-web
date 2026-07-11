@@ -15,7 +15,6 @@ dependencies = [
 [project.scripts]
 hive-web-runtime = "hive_web_runtime.mcp_server.server:main"
 hive-web-smoke = "hive_web_runtime.smoke:main"
-hive-web-egress-routes = "hive_web_runtime.core.egress_routes:main"
 
 [dependency-groups]
 dev = [

@@ -174,83 +174,9 @@ Hive Web старается делать браузерную автоматиз
 
 Это не инструмент для обхода CAPTCHA, не shopping bot и не слой для автоматизации платежей. Его назначение проще: читать, искать, извлекать страницы и аккуратно управлять браузером там, где без него нельзя.
 
-## Маршрутизация Ozon через egress
+## Сетевая маршрутизация
 
-Hive Web умеет проверять маршруты перед открытием URL и при необходимости обновлять маршрутизацию.
-
-Файл конфигурации по умолчанию:
-
-```bash
-~/.config/hive-web-runtime/egress-routes.json
-```
-
-При первом запуске он создаётся автоматически с правилом:
-
-```json
-{
-  "enabled": true,
-  "refresh_interval_seconds": 3600,
-  "rules": [
-    {
-      "name": "ozon-direct",
-      "enabled": true,
-      "domains": ["ozon.ru", "www.ozon.ru", ".ozon.ru"],
-      "resolve_hosts": ["ozon.ru", "www.ozon.ru"],
-      "gateway": "auto",
-      "interface": "auto",
-      "strict": false
-    }
-  ]
-}
-```
-
-Кэш статуса:
-
-```bash
-~/.cache/hive-web-runtime/egress-routes-state.json
-```
-Проверка и обновление маршрутов выполняется при запуске/обновлении и при устаревании состояния.
-На не-macOS платформах этот механизм работает как безопасный no-op и возвращает структурированные предупреждения.
-
-```bash
-hive-web-egress-routes status
-hive-web-egress-routes ensure --force --url https://www.ozon.ru
-./scripts/update-egress-routes.sh
-```
-
-Применение маршрутов выполняется системной командой `route`, поэтому для некоторых окружений нужны права (например, через `sudo` или launchd-агент).
-Чтобы маршруты Ozon обновлялись на macOS постоянно, один раз установите LaunchDaemon helper:
-
-```bash
-sudo bash scripts/install-ozon-direct-bypass.sh
-```
-
-Установщик Ozon записывает/обновляет правило `ozon-direct` в `egress-routes.json`, устанавливает периодический LaunchDaemon и сразу выполняет privileged route refresh. По умолчанию helper обновляет маршруты каждые 5 минут.
-
-Безопасное состояние:
-
-```text
-Anthropic / OpenAI / Claude Code -> VPN route вроде utun*
-Ozon host IPs                   -> обычный локальный интерфейс/gateway вроде en0
-```
-
-Проверяйте после установки или после переподключения VPN:
-
-```bash
-route -n get 185.73.193.68
-route -n get 185.73.194.82
-```
-
-Если Ozon routes снова показывают `utun*`, перезапустите installer или дождитесь refresh от LaunchDaemon. На некоторых VPN переподключение может заменить host routes.
-Если вы запускали старую версию Ozon helper и API-трафик пошёл напрямую вместо VPN, один раз переподключите VPN, чтобы восстановить broad split routes, затем запустите этот исправленный installer.
-
-Удаление Ozon helper:
-
-```bash
-sudo LABEL=com.hive-web-runtime.egress-routes.ozon bash scripts/uninstall-egress-routes-launchdaemon.sh
-```
-
-Это только обновляет локальные маршруты для настроенных доменов. Механизм не обходит CAPTCHA, не логинится, не добавляет товары в корзину и не автоматизирует checkout.
+Hive Web не меняет системные маршруты и не устанавливает routing helpers. VPN/proxy policy должна жить вне runtime или в отдельной per-request proxy-инфраструктуре.
 
 ## Разработка
 
