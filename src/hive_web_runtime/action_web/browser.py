@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 import uuid
 from dataclasses import dataclass, field
+from typing import Any
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 from hive_web_runtime.action_web.models import BrowserSessionInfo, BrowserSnapshot
 from hive_web_runtime.action_web.snapshots import SNAPSHOT_JS, condense_snapshot
@@ -42,11 +44,28 @@ class ActionWebRuntime:
 
     async def session_create(self, headless: bool | None = None, name: str | None = None) -> BrowserSessionInfo:
         headless = self.config.browser_headless if headless is None else headless
-        pw = await self._ensure_playwright()
-        browser = await pw.chromium.launch(headless=headless)
-        context = await browser.new_context(user_agent=self.config.user_agent)
-        page = await context.new_page()
         session_id = name or f"browser_{uuid.uuid4().hex[:8]}"
+        if session_id in self._sessions:
+            raise ValueError(f"action-web session already exists: {session_id}")
+        pw = await self._ensure_playwright()
+        launch_kwargs: dict[str, Any] = {"headless": headless}
+        if self.config.browser_channel:
+            launch_kwargs["channel"] = self.config.browser_channel
+        proxy = _playwright_proxy(self.config.browser_proxy_url)
+        if proxy:
+            launch_kwargs["proxy"] = proxy
+        if self.config.browser_args:
+            launch_kwargs["args"] = self.config.browser_args
+        browser = await pw.chromium.launch(**launch_kwargs)
+        context_kwargs: dict[str, Any] = {}
+        if self.config.user_agent:
+            context_kwargs["user_agent"] = self.config.user_agent
+        if self.config.browser_locale:
+            context_kwargs["locale"] = self.config.browser_locale
+        if self.config.browser_timezone:
+            context_kwargs["timezone_id"] = self.config.browser_timezone
+        context = await browser.new_context(**context_kwargs)
+        page = await context.new_page()
         self._sessions[session_id] = BrowserSession(session_id, browser, context, page, headless)
         return BrowserSessionInfo(session_id=session_id, headless=headless)
 
@@ -66,7 +85,7 @@ class ActionWebRuntime:
         if not target_url:
             raise ValueError("Either url or search_query is required")
 
-        response = await session.page.goto(target_url, wait_until=wait_until)
+        response = await session.page.goto(target_url, wait_until=wait_until, timeout=self.config.page_timeout_ms)
         return {
             "session_id": session_id,
             "url": session.page.url,
@@ -80,6 +99,7 @@ class ActionWebRuntime:
         artifact_id = new_artifact_id("browser_snapshot")
         self.artifacts.put_json(artifact_id, "raw.json", raw)
         snap = condense_snapshot(raw, max_tokens=max_tokens, session_id=session_id, artifact_id=artifact_id)
+        self.artifacts.put_json(artifact_id, "snapshot.json", snap.model_dump())
         session.ref_map = {e.ref: e.selector for e in snap.interactives if e.selector}
         session.ref_names = {e.ref: f"{e.role} {e.name}" for e in snap.interactives}
         return snap
@@ -126,3 +146,22 @@ class ActionWebRuntime:
         if self._playwright is not None:
             await self._playwright.stop()
             self._playwright = None
+
+
+def _playwright_proxy(proxy_url: str | None) -> dict[str, str] | None:
+    if not proxy_url:
+        return None
+    parsed = urlsplit(proxy_url)
+    if not parsed.scheme or not parsed.hostname:
+        return {"server": proxy_url}
+    scheme = "socks5" if parsed.scheme.lower() == "socks5h" else parsed.scheme
+    host = parsed.hostname
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    netloc = host if parsed.port is None else f"{host}:{parsed.port}"
+    proxy: dict[str, str] = {"server": urlunsplit((scheme, netloc, "", "", ""))}
+    if parsed.username:
+        proxy["username"] = unquote(parsed.username)
+    if parsed.password:
+        proxy["password"] = unquote(parsed.password)
+    return proxy

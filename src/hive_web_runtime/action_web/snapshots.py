@@ -18,11 +18,12 @@ def condense_snapshot(raw: dict, max_tokens: int = 1200, session_id: str | None 
             )
         )
     visible_text = str(raw.get("text") or "")
+    visible_elements = elements
     summary_payload = {
         "url": raw.get("url", ""),
         "title": raw.get("title", ""),
         "visible_text": visible_text,
-        "interactives": [e.model_dump(exclude={"selector"}) for e in elements],
+        "interactives": [e.model_dump(exclude={"selector"}) for e in visible_elements],
     }
     tokens = count_tokens(summary_payload)
     truncated = False
@@ -31,12 +32,20 @@ def condense_snapshot(raw: dict, max_tokens: int = 1200, session_id: str | None 
         visible_text, truncated, _ = trim_to_token_budget(visible_text, budget_for_text)
         summary_payload["visible_text"] = visible_text
         tokens = count_tokens(summary_payload)
+    while tokens > max_tokens and visible_elements:
+        truncated = True
+        keep = max(0, int(len(visible_elements) * 0.8))
+        if keep == len(visible_elements):
+            keep -= 1
+        visible_elements = visible_elements[:keep]
+        summary_payload["interactives"] = [e.model_dump(exclude={"selector"}) for e in visible_elements]
+        tokens = count_tokens(summary_payload)
     return BrowserSnapshot(
         session_id=session_id,
         url=str(raw.get("url") or ""),
         title=str(raw.get("title") or ""),
         visible_text=visible_text,
-        interactives=elements,
+        interactives=visible_elements,
         tokens_estimate=tokens,
         artifact_id=artifact_id,
         truncated=truncated,

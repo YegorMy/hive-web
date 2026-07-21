@@ -27,7 +27,11 @@ async def main() -> None:
             tools = await session.list_tools()
             names = [t.name for t in tools.tools]
             result = await session.call_tool("static_web_extract", {"url": "https://example.com", "max_tokens": 500})
-            print(json.dumps({"tool_count": len(names), "tools": names, "extract_preview": result.content[0].text[:300]}, ensure_ascii=False, indent=2))
+            text = getattr(result.content[0], "text", str(result.content[0])) if result.content else ""
+            if getattr(result, "isError", False):
+                message = text or "unknown MCP tool error"
+                raise RuntimeError(f"static_web_extract failed: {message}")
+            print(json.dumps({"tool_count": len(names), "tools": names, "extract_preview": text[:300]}, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

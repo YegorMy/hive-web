@@ -27,8 +27,8 @@ async def static_web_extract(url: str, max_tokens: int = 3000, format: str = "ma
 
 
 @mcp.tool()
-def static_web_get_artifact(artifact_id: str, name: str = "content.md") -> str:
-    """Read a local artifact previously created by static-web/action-web."""
+def static_web_get_artifact(artifact_id: str, name: str | None = None) -> str:
+    """Read a local artifact previously created by static-web/action-web. If name is omitted, picks the most useful stored file."""
     return static_web.artifacts.get_text(artifact_id, name)
 
 

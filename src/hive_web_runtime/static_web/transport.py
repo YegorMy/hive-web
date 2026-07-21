@@ -9,11 +9,24 @@ class StaticWebTransport:
         self.firecrawl_url = firecrawl_url.rstrip("/")
         self.timeout = timeout
 
-    async def search(self, query: str, limit: int) -> dict:
+    async def search(
+        self,
+        query: str,
+        limit: int,
+        *,
+        engines: str | None = None,
+        categories: str | None = None,
+        language: str = "auto",
+    ) -> dict:
+        params = {"q": query, "format": "json", "language": language, "safesearch": 0}
+        if engines:
+            params["engines"] = engines
+        if categories:
+            params["categories"] = categories
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.get(
                 f"{self.searxng_url}/search",
-                params={"q": query, "format": "json", "language": "auto", "safesearch": 0},
+                params=params,
             )
             response.raise_for_status()
             data = response.json()

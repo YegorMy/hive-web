@@ -33,7 +33,7 @@ Static tools:
 
 - `static_web_search(query, limit=5, max_tokens=2000)`
 - `static_web_extract(url, max_tokens=3000, format="markdown")`
-- `static_web_get_artifact(artifact_id, name="content.md")`
+- `static_web_get_artifact(artifact_id, name?)`
 
 Browser tools:
 
@@ -59,7 +59,27 @@ Browser tools:
 SEARXNG_URL=http://localhost:8888
 FIRECRAWL_API_URL=http://localhost:3002
 HIVE_WEB_ARTIFACT_DIR=~/.cache/hive-web-runtime/artifacts
+HIVE_WEB_SEARCH_ENGINES=bing,wikipedia,wikidata
+HIVE_WEB_SEARCH_FALLBACK_ENGINES=bing
+HIVE_WEB_REQUEST_TIMEOUT_SECONDS=45
 ```
+
+`static_web_search` по умолчанию закрепляет SearXNG за более надёжными engines, а не даёт CAPTCHA-heavy public engines молча возвращать пустой JSON. Если у вашего SearXNG другой рабочий набор engines, переопределите `HIVE_WEB_SEARCH_ENGINES`. Search-ответы включают `warnings` из SearXNG `unresponsive_engines`, поэтому CAPTCHA/rate-limit/backend failures видны клиенту, а не выглядят как «в интернете ничего нет».
+
+Настройки action-web браузера:
+
+```bash
+HIVE_WEB_BROWSER_HEADLESS=false          # по умолчанию true
+HIVE_WEB_BROWSER_CHANNEL=chrome         # опционально: установленный Google Chrome вместо bundled Chromium
+HIVE_WEB_BROWSER_PROXY_URL_FILE=~/.config/hive-web-runtime/browser-proxy-url
+HIVE_WEB_BROWSER_ARGS=--disable-blink-features=AutomationControlled
+HIVE_WEB_BROWSER_LOCALE=ru-RU
+HIVE_WEB_BROWSER_TIMEZONE=Europe/Moscow
+HIVE_WEB_PAGE_TIMEOUT_MS=30000
+# или HIVE_WEB_BROWSER_PROXY_URL=http://user:password@host:port
+```
+
+Для authenticated proxy лучше использовать `HIVE_WEB_BROWSER_PROXY_URL_FILE`, чтобы не хранить секрет в MCP YAML-конфиге. Файл должен быть доступен только пользователю, например с правами `0600`.
 
 Если SearXNG и Firecrawl уже запущены по другим адресам, перед запуском MCP-сервера задайте эти переменные окружения.
 
@@ -73,6 +93,8 @@ bash scripts/install-hermes-mcp.sh
 ```
 
 Скрипт установки запускает `uv sync`, прописывает `hive_web` в `~/.hermes/config.yaml` и проверяет MCP-подключение. Шаг с Playwright нужен для браузерных инструментов `action_web_*`; для `static_web_*` достаточно SearXNG и Firecrawl.
+
+Installer также сохраняет search engine и timeout options, показанные выше. Если перед запуском задать browser options вроде `HIVE_WEB_BROWSER_CHANNEL`, `HIVE_WEB_BROWSER_PROXY_URL_FILE`, locale, timezone или `HIVE_WEB_BROWSER_ARGS`, эти безопасные runtime-настройки тоже попадут в Hermes MCP entry. Секреты лучше хранить в файлах или secret store клиента, а не в публичных примерах.
 
 После изменения MCP-конфига перезагрузите MCP в клиенте или начните новую сессию.
 
@@ -130,6 +152,10 @@ mcp_servers:
       SEARXNG_URL: "http://localhost:8888"
       FIRECRAWL_API_URL: "http://localhost:3002"
       HIVE_WEB_ARTIFACT_DIR: "/absolute/path/to/artifacts"
+      HIVE_WEB_SEARCH_ENGINES: "bing,wikipedia,wikidata"
+      HIVE_WEB_SEARCH_FALLBACK_ENGINES: "bing"
+      HIVE_WEB_REQUEST_TIMEOUT_SECONDS: "45"
+      HIVE_WEB_PAGE_TIMEOUT_MS: "30000"
     connect_timeout: 60
     enabled: true
 ```
@@ -169,14 +195,23 @@ Hive Web старается делать браузерную автоматиз
 
 - поиск и извлечение возвращают компактный markdown или JSON, а не полный HTML по умолчанию;
 - крупные данные сохраняются как артефакты и читаются по `artifact_id`;
+- `static_web_get_artifact` сам выбирает самый полезный файл артефакта, если `name` не указан (`content.md`, `snapshot.json`, `results.json`, затем `raw.json`);
 - browser snapshot отдаёт ссылки вида `@1` и `@2`, а не весь DOM;
 - `action_web_click` блокирует действия, похожие на оплату, ввод пароля, 2FA или CAPTCHA, пока клиент явно не подтвердит действие.
+
+## Надёжность
+
+- Static search и extraction используют настраиваемый request timeout (`HIVE_WEB_REQUEST_TIMEOUT_SECONDS`).
+- Action-web navigation использует `HIVE_WEB_PAGE_TIMEOUT_MS`, а не ждёт бесконечно зависшие страницы.
+- Повторное создание browser session с тем же именем явно отклоняется, а не перетирает старую сессию с утечкой browser context.
+- Firecrawl error payloads поднимаются как явные ошибки, а raw response сохраняется как artifact для отладки.
+- Browser snapshots режутся под requested token budget, включая interactives, при этом raw snapshot остаётся доступен в artifact store.
 
 Это не инструмент для обхода CAPTCHA, не shopping bot и не слой для автоматизации платежей. Его назначение проще: читать, искать, извлекать страницы и аккуратно управлять браузером там, где без него нельзя.
 
 ## Сетевая маршрутизация
 
-Hive Web не меняет системные маршруты и не устанавливает routing helpers. VPN/proxy policy должна жить вне runtime или в отдельной per-request proxy-инфраструктуре.
+Hive Web не меняет системные маршруты и не устанавливает routing helpers. Если браузерной сессии нужен специальный exit path, настройте action-web browser proxy через `HIVE_WEB_BROWSER_PROXY_URL_FILE` или `HIVE_WEB_BROWSER_PROXY_URL`; static-web search/extract продолжает ходить через свои SearXNG/Firecrawl backend-ы.
 
 ## Разработка
 

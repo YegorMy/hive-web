@@ -16,6 +16,7 @@ class SearchResponse(BaseModel):
     tokens_estimate: int
     artifact_id: str
     truncated: bool = False
+    warnings: list[str] = Field(default_factory=list)
 
 
 class ExtractResponse(BaseModel):
