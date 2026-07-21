@@ -83,6 +83,35 @@ HIVE_WEB_PAGE_TIMEOUT_MS=30000
 
 Если SearXNG и Firecrawl уже запущены по другим адресам, перед запуском MCP-сервера задайте эти переменные окружения.
 
+## Запуск backend-сервисов
+
+Hive Web — это MCP runtime, а не bundled search/scrape stack. Сначала запустите SearXNG и Firecrawl, затем запускайте или регистрируйте MCP-сервер.
+
+Если используется companion local Docker stack на macOS, обычный flow такой:
+
+```bash
+cd ~/workspace/hermes/hermes-local-web-stack
+./scripts/start.sh          # docker compose up -d и endpoint checks
+./scripts/status.sh         # проверяет SearXNG search и Firecrawl /v1/scrape
+./scripts/ensure-running.sh # idempotent readiness/repair check для autostart
+```
+
+Ожидаемый healthy status:
+
+```text
+SearXNG: 10 results
+Firecrawl scrape: HTTP 200 ... markdown chars
+```
+
+`scripts/status.sh` должен проверять реальный Firecrawl scrape, а не просто ответ порта `3002`. Root HTTP 200 доказывает только то, что API process слушает порт; для `static_web_extract` нужен рабочий `/v1/scrape`.
+
+Для generic setup подойдёт любой SearXNG с JSON search и любой Firecrawl-compatible API:
+
+```bash
+export SEARXNG_URL=http://localhost:8888
+export FIRECRAWL_API_URL=http://localhost:3002
+```
+
 ## Установка
 
 ```bash
@@ -110,6 +139,20 @@ uv run hive-web-runtime
 
 Сервер работает по MCP stdio и ждёт подключения клиента.
 
+## Быстрый локальный smoke test
+
+Когда SearXNG и Firecrawl уже healthy:
+
+```bash
+cd /path/to/hive-web
+uv run pytest -q
+hermes mcp test hive_web
+uv run python scripts/test-mcp-client.py
+uv run python scripts/smoke-action-web.py
+```
+
+`scripts/test-mcp-client.py` инициализирует MCP server по stdio, читает список tools и вызывает `static_web_extract` для `https://example.com`. Скрипт падает, если MCP tool вернул ошибку, так что зелёный запуск означает, что Firecrawl extraction реально сработал.
+
 ## Проверки для разработки
 
 Запуск unit-тестов:
@@ -122,6 +165,12 @@ Live smoke test через MCP. Для него Firecrawl должен быть 
 
 ```bash
 uv run python scripts/test-mcp-client.py
+```
+
+Для live browser changes также запускайте:
+
+```bash
+uv run python scripts/smoke-action-web.py
 ```
 
 ## Подключение к Hermes

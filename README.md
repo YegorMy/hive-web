@@ -83,6 +83,35 @@ Prefer `HIVE_WEB_BROWSER_PROXY_URL_FILE` for authenticated proxies so secrets st
 
 If you already run SearXNG and Firecrawl somewhere else, set those environment variables before starting the MCP server.
 
+## Running the backend services
+
+Hive Web is an MCP runtime, not a bundled search/scrape stack. Start SearXNG and Firecrawl first, then start or register the MCP server.
+
+If you use the companion local Docker stack on macOS, the normal flow is:
+
+```bash
+cd ~/workspace/hermes/hermes-local-web-stack
+./scripts/start.sh          # docker compose up -d and endpoint checks
+./scripts/status.sh         # verifies SearXNG search and Firecrawl /v1/scrape
+./scripts/ensure-running.sh # idempotent readiness/repair check used by autostart
+```
+
+Expected healthy status:
+
+```text
+SearXNG: 10 results
+Firecrawl scrape: HTTP 200 ... markdown chars
+```
+
+`scripts/status.sh` should check a real Firecrawl scrape, not just that port `3002` answers. A root HTTP 200 only proves the API process is listening; `static_web_extract` requires `/v1/scrape` to work.
+
+For a generic setup, any SearXNG instance that serves JSON search and any Firecrawl-compatible API work:
+
+```bash
+export SEARXNG_URL=http://localhost:8888
+export FIRECRAWL_API_URL=http://localhost:3002
+```
+
 ## Install
 
 ```bash
@@ -110,6 +139,20 @@ uv run hive-web-runtime
 
 The server speaks MCP over stdio, so it waits for an MCP client.
 
+## Quick local smoke test
+
+With SearXNG and Firecrawl already healthy:
+
+```bash
+cd /path/to/hive-web
+uv run pytest -q
+hermes mcp test hive_web
+uv run python scripts/test-mcp-client.py
+uv run python scripts/smoke-action-web.py
+```
+
+`scripts/test-mcp-client.py` initializes the MCP server over stdio, lists tools, and calls `static_web_extract` against `https://example.com`. It fails if the MCP tool returns an error, so a green run means Firecrawl extraction actually worked.
+
 ## Development checks
 
 Run the unit tests:
@@ -122,6 +165,12 @@ Run a live MCP smoke test. This requires Firecrawl to be reachable at `FIRECRAWL
 
 ```bash
 uv run python scripts/test-mcp-client.py
+```
+
+For live browser changes, also run:
+
+```bash
+uv run python scripts/smoke-action-web.py
 ```
 
 ## Hermes setup
